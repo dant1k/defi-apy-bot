@@ -1,0 +1,11 @@
+aiogram==3.4.1
+aiohttp==3.9.1
+sqlalchemy==2.0.25
+alembic==1.13.1
+asyncpg==0.29.0
+aiosqlite==0.19.0
+python-dotenv==1.0.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+loguru==0.7.2
+
