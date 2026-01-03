@@ -7,7 +7,9 @@ from loguru import logger
 
 from config.settings import settings
 from bot.database.crud import init_db
-from bot.handlers import start, pools, strategies
+from bot.handlers import start, enhanced, help
+# pools и strategies отключены - используется enhanced
+# from bot.handlers import pools, strategies
 
 
 # Настройка логирования
@@ -57,8 +59,11 @@ async def main():
     
     # Регистрируем обработчики
     dp.include_router(start.router)
-    dp.include_router(pools.router)
-    dp.include_router(strategies.router)
+    dp.include_router(help.router)  # Справка должна быть перед другими, чтобы не конфликтовать
+    # pools.router и strategies.router отключены - используются handlers из enhanced.router
+    # dp.include_router(pools.router)
+    # dp.include_router(strategies.router)
+    dp.include_router(enhanced.router)  # Улучшенные handlers
     
     # Регистрируем startup и shutdown
     dp.startup.register(on_startup)
