@@ -7,7 +7,7 @@ from loguru import logger
 
 from config.settings import settings
 from bot.database.crud import init_db
-from bot.handlers import start, enhanced, help
+from bot.handlers import start, search, enhanced, help
 # pools и strategies отключены - используется enhanced
 # from bot.handlers import pools, strategies
 
@@ -59,6 +59,7 @@ async def main():
     
     # Регистрируем обработчики
     dp.include_router(start.router)
+    dp.include_router(search.router)  # Поиск должен быть перед enhanced, чтобы перехватывать текстовые запросы
     dp.include_router(help.router)  # Справка должна быть перед другими, чтобы не конфликтовать
     # pools.router и strategies.router отключены - используются handlers из enhanced.router
     # dp.include_router(pools.router)

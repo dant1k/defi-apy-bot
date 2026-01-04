@@ -84,23 +84,21 @@ class TelegramFormatter:
             token_a = pool.get("token_a", "???")
             token_b = pool.get("token_b", "???")
             pair_name = f"{token_a}-{token_b}"
-            fee_tier = pool.get("fee_tier_display", "N/A")
             
-            volume = float(pool.get("dailyVolumeUSD", 0))
-            fees = float(pool.get("feesUSD", 0))
+            farm = " 🌾" if pool.get('has_farm') else ""
+            fire = " 🔥" if pool.get('total_apr', 0) > 100 else ""
+            
+            # Поддержка разных форматов полей (Hyperion vs Bluefin)
+            volume = float(pool.get("dailyVolumeUSD", pool.get("volume_24h", 0)))
+            fees = float(pool.get("feesUSD", pool.get("fees_24h", 0)))
             total_apr = float(pool.get("total_apr", 0))
-            fee_apr = float(pool.get("feeAPR", 0))
-            farm_apr = float(pool.get("farmAPR", 0))
             
-            # Формат с эмодзи
-            message += f"{i}. <b>{pair_name}</b>\n"
-            message += f"🎯 Fee Tier: {fee_tier}\n"
-            message += f"💰 TVL: ${tvl:,.0f}\n"
-            message += f"📊 Volume 24H: ${volume:,.0f}\n"
+            # Минималистичный формат (как в поиске)
+            message += f"{i}. <b>{pair_name}</b>{farm}{fire}\n"
+            message += f"   💰 TVL: ${tvl:,.0f}\n"
+            message += f"   📊 Vol 24H: ${volume:,.0f} | "
             message += f"💵 Fees 24H: ${fees:,.2f}\n"
-            message += f"📈 APR: {total_apr:.2f}%\n"
-            message += f"   ├─ Fee APR: {fee_apr:.2f}%\n"
-            message += f"   └─ Farm APR: {farm_apr:.2f}%\n\n"
+            message += f"   📈 APR: <b>{total_apr:.2f}%</b>\n\n"
         
         return message.strip()
     

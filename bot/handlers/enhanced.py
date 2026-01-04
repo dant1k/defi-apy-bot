@@ -5,6 +5,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from collections import defaultdict
+from typing import List, Dict
 from loguru import logger
 
 from bot.utils.hyperion_enhanced import HyperionAPI
@@ -141,51 +142,7 @@ async def cmd_top(message: Message):
         await message.answer("❌ Произошла ошибка при получении топ пулов.")
 
 
-@router.message(Command("search"))
-async def cmd_search(message: Message):
-    """Команда /search <token> - Поиск пулов по токену"""
-    try:
-        args = message.text.split()[1:] if message.text else []
-        
-        if not args:
-            await message.answer(
-                "❌ Укажите токен для поиска\n\n"
-                "Использование: /search <token>\n"
-                "Пример: /search USDC - найдет все пулы с USDC"
-            )
-            return
-        
-        search_token = args[0].upper().strip()
-        
-        msg = await message.answer(f"🔍 Ищу пулы с токеном {search_token}...")
-        
-        pools = await api.get_all_pools()
-        if not pools:
-            await msg.edit_text("❌ Не удалось загрузить пулы.")
-            return
-        
-        # Фильтруем пулы по токену
-        filtered = [
-            p for p in pools 
-            if search_token in p.get("token_a", "").upper() or search_token in p.get("token_b", "").upper()
-        ]
-        
-        if not filtered:
-            await msg.edit_text(f"❌ Пулы с токеном {search_token} не найдены.")
-            return
-        
-        # Сортируем по TVL
-        filtered = api.filter_pools(filtered, sort_by='tvl', limit=20)
-        
-        text = formatter.format_pools_table(filtered, f"🔍 Pools with {search_token}")
-        
-        keyboard = _create_pools_keyboard()
-        
-        await msg.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
-        
-    except Exception as e:
-        logger.error(f"Error in cmd_search: {e}")
-        await message.answer("❌ Произошла ошибка при поиске пулов.")
+# Команда /search перенесена в bot/handlers/search.py для более продвинутого поиска через все блокчейны
 
 
 @router.message(Command("pool"))
@@ -300,7 +257,7 @@ async def callback_back_to_pools(callback: CallbackQuery):
         filtered_pools = api.filter_pools(pools, sort_by='tvl', limit=10)
         
         text = formatter.format_pools_table(filtered_pools, "🏊 Hyperion Pools")
-        keyboard = _create_pools_keyboard()
+        keyboard = _create_pools_keyboard_with_links(filtered_pools, protocol_id="hyperion")
         
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
@@ -318,7 +275,7 @@ async def callback_filter_farm(callback: CallbackQuery):
         filtered = api.filter_pools(pools, has_farm=True, sort_by='tvl', limit=20)
         
         text = formatter.format_farm_pools(filtered)
-        keyboard = _create_pools_keyboard()
+        keyboard = _create_pools_keyboard_with_links(filtered, protocol_id="hyperion")
         
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
@@ -343,7 +300,7 @@ async def callback_sort(callback: CallbackQuery):
         }
         
         text = formatter.format_pools_table(sorted_pools, titles.get(sort_by, "📊 Top Pools"))
-        keyboard = _create_pools_keyboard()
+        keyboard = _create_pools_keyboard_with_links(sorted_pools, protocol_id="hyperion")
         
         try:
             await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
@@ -370,7 +327,7 @@ async def callback_refresh_pools(callback: CallbackQuery):
         filtered_pools = api.filter_pools(pools, sort_by='tvl', limit=10)
         
         text = formatter.format_pools_table(filtered_pools, "📊 Top Pools by TVL")
-        keyboard = _create_pools_keyboard()
+        keyboard = _create_pools_keyboard_with_links(filtered_pools, protocol_id="hyperion")
         
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
@@ -429,7 +386,7 @@ async def callback_refresh_pool(callback: CallbackQuery):
 
 def _get_pool_url(pool_id: str) -> str:
     """
-    Генерирует URL для пула на сайте Hyperfluid
+    Генерирует URL для пула на сайте Hyperion DEX
     
     Args:
         pool_id: ID пула
@@ -437,7 +394,41 @@ def _get_pool_url(pool_id: str) -> str:
     Returns:
         str: URL пула
     """
-    return f"https://app.hyperfluid.xyz/pool/{pool_id}"
+    return f"https://hyperion.xyz/pool/{pool_id}"
+
+
+def _get_protocol_url(protocol_id: str) -> str:
+    """
+    Генерирует URL для главной страницы протокола
+    
+    Args:
+        protocol_id: ID протокола (hyperion, bluefin)
+        
+    Returns:
+        str: URL протокола
+    """
+    if protocol_id == 'hyperion':
+        return "https://hyperion.xyz"
+    elif protocol_id == 'bluefin':
+        return "https://trade.bluefin.io"
+    return ""
+
+
+def _get_protocol_display_name(protocol_id: str) -> str:
+    """
+    Получить отображаемое имя протокола
+    
+    Args:
+        protocol_id: ID протокола
+        
+    Returns:
+        str: Отображаемое имя
+    """
+    names = {
+        'hyperion': 'Hyperion',
+        'bluefin': 'Bluefin'
+    }
+    return names.get(protocol_id, protocol_id.capitalize())
 
 
 # Callback handlers для новой логики навигации
@@ -555,7 +546,7 @@ async def callback_select_protocol_bluefin(callback: CallbackQuery):
         
         text = formatter.format_bluefin_pools_table(filtered_pools, "🐋 Bluefin Pools")
         
-        keyboard = _create_bluefin_keyboard()
+        keyboard = _create_pools_keyboard_with_links(filtered_pools, protocol_id="bluefin")
         
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
@@ -579,7 +570,8 @@ async def callback_select_protocol_hyperion(callback: CallbackQuery):
         
         text = formatter.format_pools_table(filtered_pools, "🏊 Hyperion Pools")
         
-        keyboard = _create_pools_keyboard()
+        # Создаем клавиатуру с кнопкой перехода на сайт протокола
+        keyboard = _create_pools_keyboard_with_links(filtered_pools, protocol_id="hyperion")
         
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
@@ -603,7 +595,8 @@ async def callback_show_pools_hyperion(callback: CallbackQuery):
         
         text = formatter.format_pools_table(filtered_pools, "🏊 Hyperion Pools")
         
-        keyboard = _create_pools_keyboard()
+        # Создаем клавиатуру с кнопкой перехода на сайт протокола
+        keyboard = _create_pools_keyboard_with_links(filtered_pools, protocol_id="hyperion")
         
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
@@ -622,6 +615,43 @@ def _create_pools_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="⬅️ Назад к протоколам", callback_data="select_blockchain_aptos")
         ]
     ])
+
+
+def _create_pools_keyboard_with_links(pools: List[Dict], protocol_id: str = "hyperion") -> InlineKeyboardMarkup:
+    """Создать клавиатуру с одной кнопкой для перехода на сайт протокола"""
+    keyboard = []
+    
+    # Одна кнопка для перехода на сайт протокола
+    protocol_url = _get_protocol_url(protocol_id)
+    protocol_name = _get_protocol_display_name(protocol_id)
+    
+    if protocol_url:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"🌐 Перейти на {protocol_name}",
+                url=protocol_url
+            )
+        ])
+    
+    # Навигационные кнопки - определяем callback_data в зависимости от протокола
+    if protocol_id == "bluefin":
+        refresh_callback = "refresh_bluefin_markets"
+        settings_callback = "bluefin_settings"
+        back_callback = "select_blockchain_sui"
+    else:  # hyperion или другие
+        refresh_callback = "refresh_pools"
+        settings_callback = "pools_settings"
+        back_callback = "select_blockchain_aptos"
+    
+    keyboard.append([
+        InlineKeyboardButton(text="🔄 Обновить", callback_data=refresh_callback),
+        InlineKeyboardButton(text="⚙️ Настройки", callback_data=settings_callback)
+    ])
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад к протоколам", callback_data=back_callback)
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def _create_settings_keyboard() -> InlineKeyboardMarkup:
@@ -644,17 +674,6 @@ def _create_settings_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def _create_bluefin_keyboard() -> InlineKeyboardMarkup:
-    """Создать простую клавиатуру для списка рынков Bluefin"""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_bluefin_markets"),
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="bluefin_settings")
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад к протоколам", callback_data="select_blockchain_sui")
-        ]
-    ])
 
 
 @router.callback_query(F.data == "refresh_bluefin_markets")
@@ -667,7 +686,7 @@ async def callback_refresh_bluefin_markets(callback: CallbackQuery):
         filtered_pools = bluefin_api.filter_pools(pools, sort_by='tvl', limit=10)
         
         text = formatter.format_bluefin_pools_table(filtered_pools, "🐋 Bluefin Pools")
-        keyboard = _create_bluefin_keyboard()
+        keyboard = _create_pools_keyboard_with_links(filtered_pools, protocol_id="bluefin")
         
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     except Exception as e:
